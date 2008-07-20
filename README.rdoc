@@ -56,6 +56,48 @@ Alright, so now that the database tables are in place, we can fire up version_fu
 
 Thats it.
 
+To revert your model to a target version just invoke the models revert_to! method passing the target version number as the argument. If the number
+is not a valid version number a VersionException will be raised.
+
+  class PagesController < ApplicationController
+    ...
+    # PUT /pages/1/revert?version=number
+    # PUT /pages/1/revert.xml?version=number
+    def revert
+      @page = Page.find(params[:id])
+
+      reverted = false
+      begin
+        reverted = @page.revert_to! params[:version].to_i
+      rescue Exception
+      end
+    
+      respond_to do |format|
+        if(reverted)
+          flash[:notice] = "Page reverted to version #{@page.version}."
+          format.html { redirect_to(@page) }
+        else
+          flash[:err] = "Page could not be reverted to #{params[:version]}. Page is at version #{@page.version}."
+          format.html { redirect_to(@page) }
+        end
+      end
+    end
+  end 
+
+When listing the a models versions it may sometimes be helpful to indicate what the current version is. To do so invoke the is_current_version? method on the version objects. todo: cache the current version in the versioned model objects themselves
+
+in show.html.erb
+
+  <h2>Versions</h2>
+  <ul>
+  <%- @page.versions.each do |page_version| -%>
+    <li>
+    <h3><%= page_version.title %></h3> 
+    <%= link_to "revert to version #{page_version.version}", 
+                revert_page_url(@page, {:version=>page_version.version}) unless page_version.is_current_version? %>
+    </li>
+  <%- end -%>
+  </ul>
 
 == Configuration
 
@@ -101,6 +143,7 @@ By default a new version will be saved whenever a versioned column is changed.  
 
 
 == Author
+* with a few additions by softprops http://github.com/softprops/
 
 * version_fu was created by Jordan McKible http://jordan.mckible.com
 

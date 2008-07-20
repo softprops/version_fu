@@ -1,4 +1,7 @@
 module VersionFu
+  
+  class VersionException < Exception; end
+  
   def self.included(base)
     base.extend ClassMethods
   end
@@ -9,12 +12,12 @@ module VersionFu
       __send__ :include, VersionFu::InstanceMethods
 
       cattr_accessor :versioned_class_name, :versioned_foreign_key, :versioned_table_name, 
-                     :version_column, :versioned_columns
+                     :version_column, :versioned_columns, :reverting
 
       self.versioned_class_name         = options[:class_name]  || 'Version'
       self.versioned_foreign_key        = options[:foreign_key] || self.to_s.foreign_key
       self.versioned_table_name         = options[:table_name]  || "#{table_name_prefix}#{base_class.name.demodulize.underscore}_versions#{table_name_suffix}"
-      self.version_column               = options[:version_column]    || 'version'
+      self.version_column               = options[:version_column]  || 'version'
 
       # Setup versions association
       class_eval do
@@ -26,8 +29,9 @@ module VersionFu
             find :first, :order=>'version desc'
           end                    
         end
-
+        
         before_save :check_for_new_version
+        
       end
       
       # Versioned Model
@@ -43,6 +47,16 @@ module VersionFu
           find :first, :order => 'version',
             :conditions => ["#{original_class.versioned_foreign_key} = ? and version > ?", version.send(original_class.versioned_foreign_key), version.version]
         end
+        
+        # find the current version
+        def self.is_current_version?(version)
+          begin
+            original_class.find (version.send(original_class.versioned_foreign_key),
+              :conditions=>["version = ?",version.version])
+          rescue ActiveRecord::RecordNotFound
+            false
+          end
+        end
 
         def previous
           self.class.before(self)
@@ -51,6 +65,11 @@ module VersionFu
         def next
           self.class.after(self)
         end
+        
+        def is_current_version?
+          @is_current ||= self.class.is_current_version?(self)
+        end
+        
       end
 
       # Housekeeping on versioned class
@@ -78,12 +97,32 @@ module VersionFu
 
 
   module InstanceMethods
+    
+    # Reverts model to a target version number.
+    # Validates first that number is valid version and
+    # when the provided number is invalid a VersionException is raised.
+    def revert_to!(number)
+      raise VersionException.new, "Invalid version." if number == nil
+      to_version = find_version(number)
+      unless to_version==nil
+        self.reverting=true
+        versioned_columns.each do |att|
+          update_attribute(att,to_version.send(att))
+        end
+        update_attribute(:version,to_version.version)
+        self.reverting=false
+        true # return true else raise exception
+      else
+        raise VersionException.new, "Invalid version."
+      end
+    end
+    
     def find_version(number)
       versions.find :first, :conditions=>{:version=>number}
     end
     
     def check_for_new_version
-      instatiate_revision if create_new_version?
+      instatiate_revision if !reverting? && create_new_version?
       true # Never halt save
     end
     
@@ -102,5 +141,10 @@ module VersionFu
       new_version.version = version_number
       self.version = version_number
     end
+    
+    def reverting?
+      reverting != nil && reverting
+    end
+   
   end
 end

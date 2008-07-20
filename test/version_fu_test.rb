@@ -29,6 +29,19 @@ class VersionFuTest < Test::Unit::TestCase
     assert !Page.new.versioned_columns.include?(:creator_id)
   end
   
+  def test_should_or_should_not_be_current_version
+    page = pages(:welcome)
+    current_version = page.version
+    page.versions.each do |page_version|
+      if(page_version.version == current_version)
+        assert page_version.is_current_version?
+      else
+        assert !page_version.is_current_version?
+      end
+    end
+    
+  end
+  
   #############################################################################
   #                               C R E A T E                                 #
   #############################################################################
@@ -83,6 +96,18 @@ class VersionFuTest < Test::Unit::TestCase
     assert_equal 'Latest', version.title
     assert_equal 'newest', version.body
     assert_equal authors(:peter).id, version.author_id
+  end
+  
+  def test_should_revert_to_version
+    page = pages(:welcome)
+    reverted_page_version = page_versions(:welcome_1);
+    did_revert = page.revert_to!(reverted_page_version.version)
+    assert did_revert
+    current_version = page.version
+    assert_equal reverted_page_version.version, current_version
+    assert_equal reverted_page_version.author_id, page.author.id
+    assert_equal reverted_page_version.title, page.title
+    assert_equal reverted_page_version.body, page.body
   end
   
   #############################################################################
