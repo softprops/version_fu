@@ -5,7 +5,7 @@ version_fu is a ActveRecord versioning plugin that takes advantage of the new di
 
 == Installation
 
-  ./script/plugin install git://github.com/jmckible/version_fu.git
+  ./script/plugin install git://github.com/softprops/version_fu.git
 
 
 == Usage
